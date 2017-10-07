@@ -1,0 +1,2 @@
+/opt/intel/compilers_and_libraries_2017.0.098/linux/bin/intel64/icc -I/home/jkim3165/oski/include -O3 -g -o example1.o -c example1.c
+/opt/intel/compilers_and_libraries_2017.0.098/linux/bin/intel64/icc -I/home/jkim3165/oski/include -O3 -g -o example1.o -c example1.c
