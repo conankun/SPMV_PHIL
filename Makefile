@@ -14,7 +14,7 @@ CFLAGS = -I$(OSKI_DIR)/include -O3 -g -DDO_NAME_MANGLING -DIND_TAG_CHAR="'i'" -D
 CLDFLAGS_SHARED = $(OSKILIBS_SHARED) -lm
 CLDFLAGS_STATIC = $(OSKILIBS_STATIC) -ldl -lm
 
-all : example1-shared example1-static
+all : example1-shared
 
 example1-shared: example1.o
 	$(CC) -o $@ $(CFLAGS) example1.o $(CLDFLAGS_SHARED)
