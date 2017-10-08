@@ -6,10 +6,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
-#include <oski/common.h>
-#include <oski/matcreate.h>
-#include <oski/matmult.h>
+#include <oski/oski.h>
+
 
 /*
  *  User's initial data:
@@ -33,9 +33,7 @@ static oski_value_t alpha = -1, beta = 1;
 static oski_value_t y_true[] = { .75, 1.05, .225 };
 
 /* ----------------------------------------------------------------- */
-static oski_matrix_t
-create_matrix (void)
-{
+static oski_matrix_t create_matrix (void) {
   oski_matrix_t A_tunable = oski_CreateMatCSR (Aptr, Aind, Aval, 3, 3,	/* CSR arrays */
 					       SHARE_INPUTMAT,	/* Copy mode */
 					       /* non-zero pattern semantics */
@@ -49,8 +47,7 @@ create_matrix (void)
   return A_tunable;
 }
 
-static oski_vecview_t
-create_x (void)
+static oski_vecview_t create_x (void)
 {
   oski_vecview_t x_view = oski_CreateVecView (x, 3, STRIDE_UNIT);
   if (x_view == INVALID_VEC)
@@ -58,8 +55,7 @@ create_x (void)
   return x_view;
 }
 
-static oski_vecview_t
-create_x_short (void)
+static oski_vecview_t create_x_short (void)
 {
   oski_vecview_t x_view = oski_CreateVecView (x, 2, STRIDE_UNIT);
   if (x_view == INVALID_VEC)
@@ -67,8 +63,7 @@ create_x_short (void)
   return x_view;
 }
 
-static oski_vecview_t
-create_y (void)
+static oski_vecview_t create_y (void)
 {
   oski_vecview_t y_view = oski_CreateVecView (y, 3, STRIDE_UNIT);
   if (y_view == INVALID_VEC)
@@ -76,85 +71,7 @@ create_y (void)
   return y_view;
 }
 
-static void
-test_should_fail_1 (void)
-{
-  int err;
-
-  /* Create a tunable sparse matrix object. */
-  oski_matrix_t A_tunable = create_matrix ();
-  oski_vecview_t x_view = create_x ();
-  oski_vecview_t y_view = create_y ();
-
-  /* Pass in bad parameters */
-  oski_PrintDebugMessage (1, "-- FAIL CASE: 1a\n");
-  err = oski_MatMult (INVALID_MAT, OP_NORMAL, alpha, x_view, beta, y_view);
-  if (!err)
-    exit (1);
-
-  oski_PrintDebugMessage (1, "-- FAIL CASE: 1b\n");
-  err = oski_MatMult (A_tunable, -1, alpha, x_view, beta, y_view);
-  if (!err)
-    exit (1);
-
-  oski_PrintDebugMessage (1, "-- FAIL CASE: 1c\n");
-  err = oski_MatMult (A_tunable, OP_NORMAL, alpha, INVALID_VEC, beta, y_view);
-  if (!err)
-    exit (1);
-
-  oski_PrintDebugMessage (1, "-- FAIL CASE: 1d\n");
-  err = oski_MatMult (A_tunable, OP_NORMAL, alpha, x_view, beta, INVALID_VEC);
-  if (!err)
-    exit (1);
-
-  oski_DestroyMat (A_tunable);
-  oski_DestroyVecView (x_view);
-  oski_DestroyVecView (y_view);
-}
-
-/* test incompatible dimensions check */
-static void
-test_should_fail_2 (void)
-{
-  int err;
-
-  /* Create a tunable sparse matrix object. */
-  oski_matrix_t A_tunable = create_matrix ();
-  oski_vecview_t x_view = create_x_short ();
-  oski_vecview_t y_view = create_y ();
-
-  oski_PrintDebugMessage (1, "-- FAIL CASE: 2a\n");
-  err = oski_MatMult (A_tunable, OP_NORMAL, alpha, x_view, beta, y_view);
-  if (!err)
-    exit (1);
-
-  oski_PrintDebugMessage (1, "-- FAIL CASE: 2b\n");
-  err = oski_MatMult (A_tunable, OP_TRANS, alpha, x_view, beta, y_view);
-  if (!err)
-    exit (1);
-
-  oski_DestroyMat (A_tunable);
-  oski_DestroyVecView (x_view);
-  oski_DestroyVecView (y_view);
-}
-
-static void
-tests_should_fail (void)
-{
-  oski_PrintDebugMessage (1,
-			  "+---------------------------------------------+\n");
-  oski_PrintDebugMessage (1,
-			  "| Checking cases which should definitely fail |\n");
-  oski_PrintDebugMessage (1,
-			  "+---------------------------------------------+\n");
-
-  test_should_fail_1 ();
-  test_should_fail_2 ();
-}
-
-static void
-test_should_pass_1 (void)
-{
+static void run (void) {
   int err;
 
   /* Create a tunable sparse matrix object. */
@@ -169,6 +86,7 @@ test_should_pass_1 (void)
 	   y_true[0], y_true[1], y_true[2]);
   printf ("Answer should be: '%s'\n", true_buffer);
 
+  clock_t begin = clock();
   /* Perform matrix vector multiply */
   err = oski_MatMult (A_tunable, OP_NORMAL, alpha, x_view, beta, y_view);
   if (err)
@@ -177,12 +95,13 @@ test_should_pass_1 (void)
   oski_DestroyMat (A_tunable);
   oski_DestroyVecView (x_view);
   oski_DestroyVecView (y_view);
-
+  clock_t end = clock();
   /* Print result, y. Should be "[ 0.750 ; 1.050 ; 0.225 ]" */
   sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y[0], y[1], y[2]);
-
+  
+  printf ("Elapsed Time (Matmult): %lf seconds\n", (double)(end-begin)/CLOCKS_PER_SEC);
   printf ("Returned: '%s'\n", ans_buffer);
-
+  
   if (strcmp (ans_buffer, true_buffer) != 0)
     {
       fprintf (stderr, "*** Got the wrong answer! ***\n");
@@ -190,28 +109,13 @@ test_should_pass_1 (void)
     }
 }
 
-static void
-tests_should_pass (void)
-{
-  oski_PrintDebugMessage (1,
-			  "+---------------------------------------------+");
-  oski_PrintDebugMessage (1,
-			  "| Checking cases which should definitely pass |");
-  oski_PrintDebugMessage (1,
-			  "+---------------------------------------------+");
-
-  test_should_pass_1 ();
-}
-
-int
-main (int argc, char *argv[])
+int main (int argc, char *argv[])
 {
   /* Initialize library; will happen automatically eventually ... */
   if (!oski_Init ())
     return 1;
 
-  tests_should_fail ();
-  tests_should_pass ();
+  run();
 
   oski_Close ();
   return 0;
