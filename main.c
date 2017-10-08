@@ -71,7 +71,7 @@ static oski_vecview_t create_y (void)
   return y_view;
 }
 
-static void run (void) {
+static void run (int r, int c, int operation) {
   int err;
 
   /* Create a tunable sparse matrix object. */
@@ -79,18 +79,25 @@ static void run (void) {
   oski_vecview_t x_view = create_x ();
   oski_vecview_t y_view = create_y ();
 
+  // Explicit Turning
+  oski_SetHintMatMult(A_tunable, OP_NORMAL, 1.0, SYMBOLIC_VEC, 1.0, SYMBOLIC_VEC, operation);
+  oski_SetHint(A_tunable, HINT_SINGLE_BLOCKSIZE, r, c);
+  oski_TuneMat(A_tunable);
+
   /* Solution */
   char ans_buffer[128], true_buffer[128];
 
-  sprintf (true_buffer, "[ %.3f ; %.3f ; %.3f ]",
-	   y_true[0], y_true[1], y_true[2]);
-  printf ("Answer should be: '%s'\n", true_buffer);
+  //sprintf (true_buffer, "[ %.3f ; %.3f ; %.3f ]", y_true[0], y_true[1], y_true[2]);
+  //printf ("Answer should be: '%s'\n", true_buffer);
 
   clock_t begin = clock();
   /* Perform matrix vector multiply */
-  err = oski_MatMult (A_tunable, OP_NORMAL, alpha, x_view, beta, y_view);
-  if (err)
-    exit (1);
+  
+  while(operation--) {
+    err = oski_MatMult (A_tunable, OP_NORMAL, alpha, x_view, beta, y_view);
+    if (err)
+      exit (1);
+  }
 
   oski_DestroyMat (A_tunable);
   oski_DestroyVecView (x_view);
@@ -102,20 +109,21 @@ static void run (void) {
   printf ("Elapsed Time (Matmult): %lf seconds\n", (double)(end-begin)/CLOCKS_PER_SEC);
   printf ("Returned: '%s'\n", ans_buffer);
   
-  if (strcmp (ans_buffer, true_buffer) != 0)
-    {
-      fprintf (stderr, "*** Got the wrong answer! ***\n");
-      exit (1);
-    }
 }
 
 int main (int argc, char *argv[])
 {
+  int i,j;
   /* Initialize library; will happen automatically eventually ... */
   if (!oski_Init ())
     return 1;
-
-  run();
+  for(i=1;i<=16;i++) {
+    for(j=1;j<=16;j++) {
+      printf("======== Block Size : %d x %d\n\n", i, j);
+      run(i,j, 100000);
+      printf("=========================================\n\n");
+    }
+  }
 
   oski_Close ();
   return 0;
