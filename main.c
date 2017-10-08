@@ -23,6 +23,7 @@ struct COO {
 };
 
 struct CSR {
+  int m, n, nnz;
   oski_index_t *Aptr;
   oski_index_t *Aind;
   oski_value_t *Aval;
@@ -39,7 +40,7 @@ struct CSR {
  *  stored implicitly. This representation uses 0-based indices.
  */
 
-static struct COO* readMatrix(char* filename) {\
+static struct COO* readMatrix(char* filename) {
   struct COO *coo;
   int i;
 
@@ -65,6 +66,10 @@ static struct COO* readMatrix(char* filename) {\
   return coo;
 }
 
+static struct CSR* Coo2Csr(struct COO *coo) {
+  return NULL;
+}
+
 static oski_value_t alpha = -1, beta = 1;
 
 /* Solution vector */
@@ -76,8 +81,8 @@ static oski_matrix_t create_matrix (oski_index_t *Aptr, oski_index_t *Aind, oski
 					       SHARE_INPUTMAT,	/* Copy mode */
 					       /* non-zero pattern semantics */
 					       3, INDEX_ZERO_BASED,
-					       MAT_TRI_LOWER,
-					       MAT_UNIT_DIAG_IMPLICIT);
+					       MAT_GENERAL,
+					       MAT_DIAG_EXPLICIT);
 
   if (A_tunable == INVALID_MAT)
     exit (1);
@@ -117,9 +122,9 @@ static void run (int r, int c, int operation) {
 
   while(operation--) {
   
-    oski_index_t Aptr[] = { 0, 0, 1, 2 };
-    oski_index_t Aind[] = { 0, 0 };
-    oski_value_t Aval[] = { -2, 0.5 };
+    oski_index_t Aptr[] = { 0, 1, 3, 5 };
+    oski_index_t Aind[] = { 0, 0, 1, 0, 2 };
+    oski_value_t Aval[] = { 1, -2, 1, 0.5, 1 };
     oski_value_t x[] = { .25, .45, .65 };
     oski_value_t y[] = { 1, 1, 1 };
 
@@ -149,7 +154,7 @@ static void run (int r, int c, int operation) {
     total_time += (double)(end-begin)/CLOCKS_PER_SEC;
     
     /* Print result, y. Should be "[ 0.750 ; 1.050 ; 0.225 ]" */
-    if(operation == 1) {
+    if(operation == 0) {
       sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y[0], y[1], y[2]);
       printf ("Returned: '%s'\n", ans_buffer);
     }
@@ -174,13 +179,14 @@ int main (int argc, char *argv[])
     printf("File does not exist\n");
     return 1;
   }
+  struct CSR *csr = Coo2Csr(coo);
   /* Initialize library; will happen automatically eventually ... */
 
   if (!oski_Init ())
     return 1;
   for(i=1;i<=16;i++) {
     for(j=1;j<=16;j++) {
-      printf("======== Block Size : %d x %d\n\n", i, j);
+      printf("======== Block Size : %d x %d ========\n\n", i, j);
       run(i,j, 1);
       printf("=========================================\n\n");
     }
