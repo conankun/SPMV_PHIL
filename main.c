@@ -13,8 +13,8 @@
 #define MAX_LEN 250
 
 struct NNZ {
-  int r, c;
-  double val;
+  oski_index_t r, c;
+  oski_value_t val;
 };
 
 struct COO {
@@ -62,12 +62,37 @@ static struct COO* readMatrix(char* filename) {
       fscanf(f, "%d%d%lf", &coo->data[i].r, &coo->data[i].c, &coo->data[i].val);
   }
   fclose(f);
-
+  // TODO: check if matrix is sorted by row (and column if same row) and sort if not
   return coo;
 }
 
 static struct CSR* Coo2Csr(struct COO *coo) {
-  return NULL;
+  struct CSR *csr = (struct CSR *)malloc(sizeof(struct CSR));
+  int i;
+
+  // Copy dimensions, nnz
+  csr->m = coo->m;
+  csr->n = coo->n;
+  csr->nnz = coo->nnz;
+  
+  // Memory Allocation
+  csr->Aptr = (oski_index_t *)calloc(csr->m+1, sizeof(oski_index_t));
+  csr->Aind = (oski_index_t *)malloc(sizeof(oski_index_t) * csr->nnz);
+  csr->Aval = (oski_value_t *)malloc(sizeof(oski_value_t) * csr->nnz);
+
+  // conversion COO -> CSR
+  for(i = 0; i < csr->nnz; i++) {
+    csr->Aptr[coo->data[i].r]++;
+    csr->Aind[i] = coo->data[i].c-1; // since column index is starting from 0
+    csr->Aval[i] = coo->data[i].val;
+  }
+
+  // sum over Aptr
+  for(i = 1; i <= csr->m; i++) {
+    csr->Aptr[i] += csr->Aptr[i-1];
+  }
+
+  return csr;
 }
 
 static oski_value_t alpha = -1, beta = 1;
@@ -106,7 +131,7 @@ static oski_vecview_t create_y (oski_value_t *y)
   return y_view;
 }
 
-static void run (int r, int c, int operation) {
+static void run (struct CSR *csr, int r, int c, int operation) {
   int err;
 
 
@@ -122,9 +147,9 @@ static void run (int r, int c, int operation) {
 
   while(operation--) {
   
-    oski_index_t Aptr[] = { 0, 1, 3, 5 };
-    oski_index_t Aind[] = { 0, 0, 1, 0, 2 };
-    oski_value_t Aval[] = { 1, -2, 1, 0.5, 1 };
+    oski_index_t *Aptr = csr->Aptr;
+    oski_index_t *Aind = csr->Aind;
+    oski_value_t *Aval = csr->Aval;
     oski_value_t x[] = { .25, .45, .65 };
     oski_value_t y[] = { 1, 1, 1 };
 
@@ -166,6 +191,32 @@ static void run (int r, int c, int operation) {
   
 }
 
+void displayCSR(struct CSR *csr) {
+  int m = csr->m;
+  int nnz = csr->nnz;
+  int i;
+  printf("Aptr: [");
+  for(i=0;i<=m;i++) {
+    printf("%d", csr->Aptr[i]);
+    if(i != m) printf(", ");
+  }
+  printf("]\n");
+
+  printf("Aind: [");
+  for(i=0;i<nnz;i++) {
+    printf("%d", csr->Aind[i]);
+    if(i != nnz-1) printf(", ");
+  }
+  printf("]\n");
+
+  printf("Aval: [");
+  for(i=0;i<nnz;i++) {
+    printf("%lf", csr->Aval[i]);
+    if(i != nnz-1) printf(", ");
+  }
+  printf("]\n");
+}
+
 int main (int argc, char *argv[])
 {
   int i,j;
@@ -187,7 +238,7 @@ int main (int argc, char *argv[])
   for(i=1;i<=16;i++) {
     for(j=1;j<=16;j++) {
       printf("======== Block Size : %d x %d ========\n\n", i, j);
-      run(i,j, 1);
+      run(csr,i,j, 1);
       printf("=========================================\n\n");
     }
   }
