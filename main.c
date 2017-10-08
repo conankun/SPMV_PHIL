@@ -3,6 +3,8 @@
  *  \brief Test sparse matrix-vector multiply.
  */
 
+// TODO: implement freeing matrix/vector from memory
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +30,20 @@ struct CSR {
   oski_index_t *Aind;
   oski_value_t *Aval;
 };
+
+struct VECTOR {
+  oski_value_t *x;
+  oski_vecview_t *x_view;
+};
+
+
+// Function Declaration
+static struct COO* readMatrix(char* filename);
+static struct CSR* Coo2Csr(struct COO *coo);
+static oski_matrix_t create_matrix (struct CSR *csr);
+static struct VECTOR* create_x (int size);
+static void run (struct CSR *csr, int r, int c, int operation);
+static void displayCSR(struct CSR *csr);
 
 /*
  *  User's initial data:
@@ -101,34 +117,38 @@ static oski_value_t alpha = -1, beta = 1;
 static oski_value_t y_true[] = { .75, 1.05, .225 };
 
 /* ----------------------------------------------------------------- */
-static oski_matrix_t create_matrix (oski_index_t *Aptr, oski_index_t *Aind, oski_value_t *Aval) {
-  oski_matrix_t A_tunable = oski_CreateMatCSR (Aptr, Aind, Aval, 3, 3,	/* CSR arrays */
+static oski_matrix_t create_matrix (struct CSR *csr) {
+  oski_matrix_t A_tunable = oski_CreateMatCSR (csr->Aptr, csr->Aind, csr->Aval, csr->m, csr->n,	/* CSR arrays */
 					       SHARE_INPUTMAT,	/* Copy mode */
 					       /* non-zero pattern semantics */
 					       3, INDEX_ZERO_BASED,
 					       MAT_GENERAL,
 					       MAT_DIAG_EXPLICIT);
-
-  if (A_tunable == INVALID_MAT)
+  
+  if (A_tunable == INVALID_MAT) {
+    printf("Matrix provided is invalid.\n");
     exit (1);
-
+  }
+  
   return A_tunable;
 }
 
-static oski_vecview_t create_x (oski_value_t *x)
+static struct VECTOR* create_x (int size)
 {
-  oski_vecview_t x_view = oski_CreateVecView (x, 3, STRIDE_UNIT);
-  if (x_view == INVALID_VEC)
+  int i;
+  oski_value_t *x = (oski_value_t *)malloc(sizeof(oski_value_t) * size);
+  oski_vecview_t *x_view = (oski_vecview_t *)malloc(sizeof(oski_vecview_t));
+  // our range will be 0 < x[i] < 1
+  for(i = 0; i < size; i++) {
+    x[i] = rand()%100 / 100.;
+  }
+  *x_view = oski_CreateVecView (x, size, STRIDE_UNIT);
+  if (*x_view == INVALID_VEC)
     exit (1);
-  return x_view;
-}
-
-static oski_vecview_t create_y (oski_value_t *y)
-{
-  oski_vecview_t y_view = oski_CreateVecView (y, 3, STRIDE_UNIT);
-  if (y_view == INVALID_VEC)
-    exit (1);
-  return y_view;
+  struct VECTOR *vec = (struct VECTOR *)malloc(sizeof(struct VECTOR));
+  vec->x = x;
+  vec->x_view = x_view;
+  return vec;
 }
 
 static void run (struct CSR *csr, int r, int c, int operation) {
@@ -146,41 +166,39 @@ static void run (struct CSR *csr, int r, int c, int operation) {
   double total_time = 0;
 
   while(operation--) {
-  
-    oski_index_t *Aptr = csr->Aptr;
-    oski_index_t *Aind = csr->Aind;
-    oski_value_t *Aval = csr->Aval;
-    oski_value_t x[] = { .25, .45, .65 };
-    oski_value_t y[] = { 1, 1, 1 };
 
-    clock_t begin = clock();
+    
 
     /* Create a tunable sparse matrix object. */
-    oski_matrix_t A_tunable = create_matrix (Aptr, Aind, Aval);
-    oski_vecview_t x_view = create_x (x);
-    oski_vecview_t y_view = create_y (y);
+    oski_matrix_t A_tunable = create_matrix (csr);
+    struct VECTOR *x_view_vec = create_x (csr->n);
+    struct VECTOR *y_view_vec = create_x (csr->n);
+
+    oski_vecview_t *x_view = x_view_vec->x_view;
+    oski_vecview_t *y_view = y_view_vec->x_view;
 
     // Explicit Turning
     oski_SetHintMatMult(A_tunable, OP_NORMAL, 1.0, SYMBOLIC_VEC, 1.0, SYMBOLIC_VEC, operation);
     oski_SetHint(A_tunable, HINT_SINGLE_BLOCKSIZE, r, c);
     oski_TuneMat(A_tunable);
     
+    clock_t begin = clock();
     // Multiply Matrix
-    err = oski_MatMult (A_tunable, OP_NORMAL, alpha, x_view, beta, y_view);
+    err = oski_MatMult (A_tunable, OP_NORMAL, alpha, *x_view, beta, *y_view);
+    clock_t end = clock();
+
     if (err)
       exit (1);
     
     oski_DestroyMat (A_tunable);
-    oski_DestroyVecView (x_view);
-    oski_DestroyVecView (y_view);
+    oski_DestroyVecView (*x_view);
+    oski_DestroyVecView (*y_view);
   
-    clock_t end = clock();
-    
     total_time += (double)(end-begin)/CLOCKS_PER_SEC;
     
     /* Print result, y. Should be "[ 0.750 ; 1.050 ; 0.225 ]" */
     if(operation == 0) {
-      sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y[0], y[1], y[2]);
+      sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y_view_vec->x[0], y_view_vec->x[1], y_view_vec->x[2]);
       printf ("Returned: '%s'\n", ans_buffer);
     }
   }
@@ -191,7 +209,7 @@ static void run (struct CSR *csr, int r, int c, int operation) {
   
 }
 
-void displayCSR(struct CSR *csr) {
+static void displayCSR(struct CSR *csr) {
   int m = csr->m;
   int nnz = csr->nnz;
   int i;
@@ -220,7 +238,10 @@ void displayCSR(struct CSR *csr) {
 int main (int argc, char *argv[])
 {
   int i,j;
-  
+  //necessary for generating random vector for SpMV
+  srand(time(NULL)); 
+
+  // get file name
   char filename[MAX_LEN];
   printf("Enter the filename of the matrix: ");
   scanf("%s", filename);
