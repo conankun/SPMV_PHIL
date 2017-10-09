@@ -13,6 +13,7 @@
 #include <oski/oski.h>
 
 #define MAX_LEN 250
+#define MAX_BUFFER 1024
 
 struct NNZ {
   oski_index_t r, c;
@@ -59,8 +60,8 @@ static void displayCSR(struct CSR *csr);
 static struct COO* readMatrix(char* filename) {
   struct COO *coo;
   int i;
-
   coo = (struct COO *)malloc(sizeof(struct COO));
+  coo->m = 0; coo->n = 0; coo->nnz = 0;
 
   // Read file
   FILE *f = fopen(filename, "r");
@@ -69,9 +70,8 @@ static struct COO* readMatrix(char* filename) {
     free(coo);
     return NULL;
   }
-
-  fscanf(f, "%d%d%d",&coo->m,&coo->n,&coo->nnz);
-
+  // split buffer into m,n, nnz
+  fscanf(f, "%d %d %d", &coo->m, &coo->n, &coo->nnz);
   coo->data = (struct NNZ *)malloc(sizeof(struct NNZ) * coo->nnz);
 
   for(i=0;i<coo->nnz;i++) {
@@ -143,8 +143,10 @@ static struct VECTOR* create_x (int size)
     x[i] = rand()%100 / 100.;
   }
   *x_view = oski_CreateVecView (x, size, STRIDE_UNIT);
-  if (*x_view == INVALID_VEC)
+  if (*x_view == INVALID_VEC) {
+    printf("Vector x is invalid vector\n");
     exit (1);
+  }
   struct VECTOR *vec = (struct VECTOR *)malloc(sizeof(struct VECTOR));
   vec->x = x;
   vec->x_view = x_view;
@@ -172,7 +174,7 @@ static void run (struct CSR *csr, int r, int c, int operation) {
     /* Create a tunable sparse matrix object. */
     oski_matrix_t A_tunable = create_matrix (csr);
     struct VECTOR *x_view_vec = create_x (csr->n);
-    struct VECTOR *y_view_vec = create_x (csr->n);
+    struct VECTOR *y_view_vec = create_x (csr->m);
 
     oski_vecview_t *x_view = x_view_vec->x_view;
     oski_vecview_t *y_view = y_view_vec->x_view;
@@ -197,10 +199,10 @@ static void run (struct CSR *csr, int r, int c, int operation) {
     total_time += (double)(end-begin)/CLOCKS_PER_SEC;
     
     /* Print result, y. Should be "[ 0.750 ; 1.050 ; 0.225 ]" */
-    if(operation == 0) {
+    /*if(operation == 0) {
       sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y_view_vec->x[0], y_view_vec->x[1], y_view_vec->x[2]);
       printf ("Returned: '%s'\n", ans_buffer);
-    }
+    }*/
   }
 
 
@@ -263,7 +265,8 @@ int main (int argc, char *argv[])
       printf("=========================================\n\n");
     }
   }
-
+  printf("Dimensions: %d x %d | nnz = %d\n", coo->m, coo->n, coo->nnz);
+  printf("Dimensions: %d x %d | nnz = %d\n", csr->m, csr->n, csr->nnz);
   oski_Close ();
   return 0;
 }
