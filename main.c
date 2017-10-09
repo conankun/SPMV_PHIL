@@ -118,12 +118,12 @@ static oski_value_t y_true[] = { .75, 1.05, .225 };
 
 /* ----------------------------------------------------------------- */
 static oski_matrix_t create_matrix (struct CSR *csr) {
-  oski_matrix_t A_tunable = oski_CreateMatCSR (csr->Aptr, csr->Aind, csr->Aval, csr->m, csr->n,	/* CSR arrays */
-					       SHARE_INPUTMAT,	/* Copy mode */
-					       /* non-zero pattern semantics */
-					       3, INDEX_ZERO_BASED,
-					       MAT_GENERAL,
-					       MAT_DIAG_EXPLICIT);
+  oski_matrix_t A_tunable = oski_CreateMatCSR (csr->Aptr, csr->Aind, csr->Aval, csr->m, csr->n, /* CSR arrays */
+                 SHARE_INPUTMAT,  /* Copy mode */
+                 /* non-zero pattern semantics */
+                 3, INDEX_ZERO_BASED,
+                 MAT_GENERAL,
+                 MAT_DIAG_EXPLICIT);
   
   if (A_tunable == INVALID_MAT) {
     printf("Matrix provided is invalid.\n");
@@ -167,45 +167,55 @@ static void run (struct CSR *csr, int r, int c, int operation) {
   
   double total_time = 0;
 
+  /* Create a tunable sparse matrix object. */
+  oski_matrix_t A_tunable = create_matrix (csr);
+  struct VECTOR *x_view_vec = create_x (csr->n);
+  struct VECTOR *y_view_vec = create_x (csr->m);
+
+  oski_vecview_t *x_view = x_view_vec->x_view;
+  oski_vecview_t *y_view = y_view_vec->x_view;
+
+  // Explicit Turning
+  oski_SetHintMatMult(A_tunable, OP_NORMAL, 1.0, SYMBOLIC_VEC, 1.0, SYMBOLIC_VEC, operation);
+  oski_SetHint(A_tunable, HINT_SINGLE_BLOCKSIZE, r, c);
+  //oski_setHint(A_tunable, HINT_NO_BLOCKS);
+  //oski_setHint(A_tunable, HINT_SINGLE_BLOCKSIZE, ARGS_NONE);
+  //oski_setHint(A_tunable, HINT_NO_BLOCKS);
+  oski_TuneMat(A_tunable);
+
+
+  char xform[256];
+  #define CONV_TEMPLATE \
+    "A_new = BCSR( InputMat, %d, %d )\n" \
+    "return A_new"
+
+  snprintf (xform, 255, CONV_TEMPLATE, r, c);
+  xform[255] = (char) 0;  /* Just in case */
+
+  err = oski_ApplyMatTransforms (A_tunable, xform);
+
   while(operation--) {
+      clock_t begin = clock();
+      // Multiply Matrix
+      err = oski_MatMult (A_tunable, OP_NORMAL, alpha, *x_view, beta, *y_view);
+      clock_t end = clock();
 
+      if (err)
+        exit (1);
     
-
-    /* Create a tunable sparse matrix object. */
-    oski_matrix_t A_tunable = create_matrix (csr);
-    struct VECTOR *x_view_vec = create_x (csr->n);
-    struct VECTOR *y_view_vec = create_x (csr->m);
-
-    oski_vecview_t *x_view = x_view_vec->x_view;
-    oski_vecview_t *y_view = y_view_vec->x_view;
-
-    // Explicit Turning
-    oski_SetHintMatMult(A_tunable, OP_NORMAL, 1.0, SYMBOLIC_VEC, 1.0, SYMBOLIC_VEC, operation);
-    oski_SetHint(A_tunable, HINT_SINGLE_BLOCKSIZE, r, c);
-    oski_TuneMat(A_tunable);
-    
-    clock_t begin = clock();
-    // Multiply Matrix
-    err = oski_MatMult (A_tunable, OP_NORMAL, alpha, *x_view, beta, *y_view);
-    clock_t end = clock();
-
-    if (err)
-      exit (1);
-    
-    oski_DestroyMat (A_tunable);
-    oski_DestroyVecView (*x_view);
-    oski_DestroyVecView (*y_view);
-  
-    total_time += (double)(end-begin)/CLOCKS_PER_SEC;
-    
-    /* Print result, y. Should be "[ 0.750 ; 1.050 ; 0.225 ]" */
-    /*if(operation == 0) {
-      sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y_view_vec->x[0], y_view_vec->x[1], y_view_vec->x[2]);
-      printf ("Returned: '%s'\n", ans_buffer);
-    }*/
+      total_time += (double)(end-begin)/CLOCKS_PER_SEC;
+      
+      /* Print result, y. Should be "[ 0.750 ; 1.050 ; 0.225 ]" */
+      /*if(operation == 0) {
+        sprintf (ans_buffer, "[ %.3f ; %.3f ; %.3f ]", y_view_vec->x[0], y_view_vec->x[1], y_view_vec->x[2]);
+        printf ("Returned: '%s'\n", ans_buffer);
+      }*/
   }
 
-
+  oski_DestroyMat (A_tunable);
+  oski_DestroyVecView (*x_view);
+  oski_DestroyVecView (*y_view);
+  
   printf ("Elapsed Time (Matmult): %lf seconds\n", total_time);
   
   
@@ -261,7 +271,7 @@ int main (int argc, char *argv[])
   for(i=1;i<=16;i++) {
     for(j=1;j<=16;j++) {
       printf("======== Block Size : %d x %d ========\n\n", i, j);
-      run(csr,i,j, 1);
+      run(csr,i,j, 1000);
       printf("=========================================\n\n");
     }
   }
