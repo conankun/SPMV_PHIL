@@ -216,7 +216,7 @@ static void run (struct CSR *csr, int r, int c, int operation) {
   oski_DestroyVecView (*x_view);
   oski_DestroyVecView (*y_view);
   
-  printf ("Elapsed Time (Matmult): %lf seconds\n", total_time);
+  printf ("%lf", total_time);
   
   
 }
@@ -268,15 +268,20 @@ int main (int argc, char *argv[])
 
   if (!oski_Init ())
     return 1;
+  
+  printf("{\"Performance\": [");
   for(i=1;i<=16;i++) {
-    for(j=1;j<=16;j++) {
-      printf("======== Block Size : %d x %d ========\n\n", i, j);
-      run(csr,i,j, 1000);
-      printf("=========================================\n\n");
-    }
+      printf("[");
+      for(j=1;j<=16;j++) {
+          run(csr,i,j, 1000);
+          if(j != 16) printf(",");
+      }
+    printf("]");
+   if(i != 16) printf(",\n");
   }
-  printf("Dimensions: %d x %d | nnz = %d\n", coo->m, coo->n, coo->nnz);
-  printf("Dimensions: %d x %d | nnz = %d\n", csr->m, csr->n, csr->nnz);
+  printf("]}");
+  //printf("Dimensions: %d x %d | nnz = %d\n", coo->m, coo->n, coo->nnz);
+  //printf("Dimensions: %d x %d | nnz = %d\n", csr->m, csr->n, csr->nnz);
   oski_Close ();
   return 0;
 }
