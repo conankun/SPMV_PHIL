@@ -1,4 +1,4 @@
-/**
+/*
  *  \file tests/matmult.c
  *  \brief Test sparse matrix-vector multiply.
  */
@@ -76,9 +76,11 @@ static struct COO* readMatrix(char* filename) {
 
   for(i=0;i<coo->nnz;i++) {
       fscanf(f, "%d%d%lf", &coo->data[i].r, &coo->data[i].c, &coo->data[i].val);
+      coo->data[i].val = 1.0;
   }
   fclose(f);
   // TODO: check if matrix is sorted by row (and column if same row) and sort if not
+//  printf("hhhhh"); fflush(stdout);
   return coo;
 }
 
@@ -140,7 +142,8 @@ static struct VECTOR* create_x (int size)
   oski_vecview_t *x_view = (oski_vecview_t *)malloc(sizeof(oski_vecview_t));
   // our range will be 0 < x[i] < 1
   for(i = 0; i < size; i++) {
-    x[i] = rand()%100 / 100.;
+    //x[i] = rand()%100 / 100.;
+    x[i]  = 1;
   }
   *x_view = oski_CreateVecView (x, size, STRIDE_UNIT);
   if (*x_view == INVALID_VEC) {
@@ -155,34 +158,25 @@ static struct VECTOR* create_x (int size)
 
 static void run (struct CSR *csr, int r, int c, int operation) {
   int err;
-
-
-  /* Solution */
-  char ans_buffer[128], true_buffer[128];
-
-  //sprintf (true_buffer, "[ %.3f ; %.3f ; %.3f ]", y_true[0], y_true[1], y_true[2]);
-  //printf ("Answer should be: '%s'\n", true_buffer);
-
-  /* Perform matrix vector multiply */
   
-  double total_time = 0;
-
   /* Create a tunable sparse matrix object. */
   oski_matrix_t A_tunable = create_matrix (csr);
+  
+  
   struct VECTOR *x_view_vec = create_x (csr->n);
   struct VECTOR *y_view_vec = create_x (csr->m);
-
+  
   oski_vecview_t *x_view = x_view_vec->x_view;
   oski_vecview_t *y_view = y_view_vec->x_view;
 
   // Explicit Turning
-  oski_SetHintMatMult(A_tunable, OP_NORMAL, 1.0, SYMBOLIC_VEC, 1.0, SYMBOLIC_VEC, operation);
+  oski_SetHintMatMult(A_tunable, OP_NORMAL, 1, SYMBOLIC_VEC, 1, SYMBOLIC_VEC, operation);
   oski_SetHint(A_tunable, HINT_SINGLE_BLOCKSIZE, r, c);
   //oski_setHint(A_tunable, HINT_NO_BLOCKS);
   //oski_setHint(A_tunable, HINT_SINGLE_BLOCKSIZE, ARGS_NONE);
   //oski_setHint(A_tunable, HINT_NO_BLOCKS);
-  oski_TuneMat(A_tunable);
 
+  oski_TuneMat(A_tunable);
 
   char xform[256];
   #define CONV_TEMPLATE \
@@ -191,9 +185,11 @@ static void run (struct CSR *csr, int r, int c, int operation) {
 
   snprintf (xform, 255, CONV_TEMPLATE, r, c);
   xform[255] = (char) 0;  /* Just in case */
-
-  err = oski_ApplyMatTransforms (A_tunable, xform);
-
+  
+  //err = oski_ApplyMatTransforms (A_tunable, xform);
+  
+  
+  double total_time = 0;
   while(operation--) {
       clock_t begin = clock();
       // Multiply Matrix
@@ -263,13 +259,15 @@ int main (int argc, char *argv[])
     printf("File does not exist\n");
     return 1;
   }
+  //printf("Coo2Csr started\n");
   struct CSR *csr = Coo2Csr(coo);
+  //printf("Coo2Csr Ended\n");
   /* Initialize library; will happen automatically eventually ... */
 
   if (!oski_Init ())
     return 1;
-  
   printf("{\"Performance\": [");
+  i=1;j=1;
   for(i=1;i<=16;i++) {
       printf("[");
       for(j=1;j<=16;j++) {
