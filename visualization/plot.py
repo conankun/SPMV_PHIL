@@ -38,6 +38,7 @@ if __name__ == "__main__":
 
 	for i in range(len(perf1d)):
 		perf1d[i] = (2 * nnz * 1000.)/float(perf1d[i])
+		perf1d[i] = perf1d[i] / 1000000000
 
 	plt.scatter(result1d, perf1d)
 	plt.xlabel('Estimated Fill')
